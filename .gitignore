@@ -1,0 +1,25 @@
+# Secretos y Entorno
+.env
+.env.local
+*.log
+
+# Datos de Sesion y Autenticacion (CRITICO)
+data/auth/
+*.json
+!package.json
+!package-lock.json
+
+# Archivos Temporales y Media
+screenshots/
+node_modules/
+.DS_Store
+dist/
+
+# Extras del proyecto
+data/*.db
+playwright-report/
+test-results/
+npm-debug.log*
+temp/
+temp_vision/
+logs/
