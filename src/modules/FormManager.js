@@ -18,10 +18,24 @@ const DEFAULT_IT_BLACKLIST_TERMS = [
   "Punzonadora",
   "Maquinado",
   "Inyeccion",
-  "Operario"
+  "Operario",
+  "Movil",
+  "Móvil",
+  "Mobile",
+  "Android",
+  "iOS",
+  "Ios",
+  "React Native",
+  "Flutter",
+  "Xamarin",
+  "Ionic",
+  "Swift",
+  "Kotlin"
 ];
 const AI_HALLUCINATION_KEYWORDS = ["imagen", "captura", "pantalla", "formulario", "muestra", "anuncio", "asistencia"];
-const AI_SANITIZED_FALLBACK_TEXT = "Tengo bases solidas en desarrollo y logica de programacion. Me adapto rapido a nuevas tecnologias; pueden ver el detalle tecnico en mi CV adjunto.";
+const AI_SANITIZED_FALLBACK_TEXT = "Tengo experiencia práctica en Node.js, React y SQLite, con foco en backend, APIs y automatización de procesos sobre SPAs.";
+const ENGLISH_LEVEL_FALLBACK_TEXT = "Mi nivel de inglés es técnico: lectura fluida de documentación, escritura funcional y conversación básica-intermedia.";
+const ENGLISH_CONTEXT_KEYWORDS = ["ingles", "inglés", "english", "idioma", "language"];
 const VISION_ACTION_TEXT = "texto";
 const VISION_ACTION_CLICK = "click";
 
@@ -105,14 +119,43 @@ export default class FormManager {
     return normalizedKeywords.some((keyword) => normalizedText.includes(keyword));
   }
 
-  sanitizeAiTextareaAnswer(answerText) {
+  isEnglishContext(text) {
+    const normalizedText = this.normalize(text);
+    if (!normalizedText) {
+      return false;
+    }
+
+    return ENGLISH_CONTEXT_KEYWORDS.some((keyword) =>
+      normalizedText.includes(this.normalize(keyword))
+    );
+  }
+
+  buildContextualFallbackText(contextText = "", defaultText = "") {
+    if (this.isSalaryContext(contextText)) {
+      return this.getSalaryValueFromEnv(defaultText);
+    }
+
+    if (this.isEnglishContext(contextText)) {
+      return ENGLISH_LEVEL_FALLBACK_TEXT;
+    }
+
+    const safeDefault = String(defaultText ?? "").trim();
+    if (safeDefault) {
+      return safeDefault;
+    }
+
+    return AI_SANITIZED_FALLBACK_TEXT;
+  }
+
+  sanitizeAiTextareaAnswer(answerText, contextText = "", fallbackText = "") {
+    const contextualFallback = this.buildContextualFallbackText(contextText, fallbackText);
     const cleaned = String(answerText ?? "").trim();
     if (!cleaned) {
       return "";
     }
 
     if (cleaned.length > 400) {
-      return AI_SANITIZED_FALLBACK_TEXT;
+      return contextualFallback;
     }
 
     const normalized = this.normalize(cleaned);
@@ -121,7 +164,7 @@ export default class FormManager {
     );
 
     if (hasHallucinationSignals) {
-      return AI_SANITIZED_FALLBACK_TEXT;
+      return contextualFallback;
     }
 
     return cleaned;
@@ -221,6 +264,14 @@ export default class FormManager {
   async getTextareaContextText(textareaLocator) {
     return textareaLocator.evaluate((textarea) => {
       const pickText = (node) => String(node?.textContent || "").replace(/\s+/g, " ").trim();
+      const cropText = (value, max = 260) => String(value || "").replace(/\s+/g, " ").trim().slice(0, max);
+      const pushUnique = (bucket, value) => {
+        const clean = cropText(value);
+        if (clean && !bucket.includes(clean)) {
+          bucket.push(clean);
+        }
+      };
+      const contextChunks = [];
 
       let labelsByFor = [];
       if (textarea.id) {
@@ -233,16 +284,36 @@ export default class FormManager {
       const container = textarea.closest(".form-group, .field, .question, li, section, article, div") || textarea;
       const nearbyLabel = container ? container.querySelector("label") : null;
 
-      return [
-        textarea.getAttribute("placeholder") || "",
-        textarea.getAttribute("name") || "",
-        textarea.getAttribute("id") || "",
-        textarea.getAttribute("aria-label") || "",
-        pickText(parentLabel),
-        pickText(nearbyLabel),
-        ...labelsByFor.map((label) => pickText(label)).filter(Boolean),
-        pickText(container)
-      ].join(" ");
+      pushUnique(contextChunks, textarea.getAttribute("placeholder") || "");
+      pushUnique(contextChunks, textarea.getAttribute("name") || "");
+      pushUnique(contextChunks, textarea.getAttribute("id") || "");
+      pushUnique(contextChunks, textarea.getAttribute("aria-label") || "");
+      pushUnique(contextChunks, pickText(parentLabel));
+      pushUnique(contextChunks, pickText(nearbyLabel));
+
+      labelsByFor.forEach((label) => pushUnique(contextChunks, pickText(label)));
+
+      let node = textarea;
+      for (let depth = 0; depth < 5 && node; depth += 1) {
+        const parent = node.parentElement;
+        if (!parent) {
+          break;
+        }
+
+        const semanticNode = parent.querySelector(
+          "label, legend, h1, h2, h3, h4, h5, strong, b, [class*='pregunta'], [class*='question'], [class*='label'], [class*='title']"
+        );
+
+        pushUnique(contextChunks, pickText(semanticNode));
+        pushUnique(contextChunks, pickText(parent.previousElementSibling));
+        pushUnique(contextChunks, parent.getAttribute("aria-label") || "");
+
+        node = parent;
+      }
+
+      pushUnique(contextChunks, pickText(container));
+
+      return cropText(contextChunks.join(" "), 1200);
     }).catch(() => "");
   }
 
@@ -329,17 +400,20 @@ export default class FormManager {
       const textareaContextText = await this.getTextareaContextText(field);
       console.log("[FormManager] Contexto extraido.");
       const isSalaryTextarea = this.isSalaryContext(textareaContextText);
+      const contextualFallbackText = this.buildContextualFallbackText(textareaContextText, fallbackText);
+
+      answerText = contextualFallbackText;
 
       if (isSalaryTextarea) {
         console.log("[FormManager] Campo salarial detectado. Se omite IA y se inyecta valor numerico.");
-        answerText = this.getSalaryValueFromEnv();
+        answerText = this.getSalaryValueFromEnv(contextualFallbackText);
       }
 
       if (!isSalaryTextarea && typeof getTextareaAnswer === "function") {
         try {
           console.log("[FormManager] Enviando captura a GPT-4o...");
-          const generated = await getTextareaAnswer(containerSelector, fallbackText);
-          const aiResult = this.parseVisionActionResult(generated, fallbackText);
+          const generated = await getTextareaAnswer(containerSelector, contextualFallbackText, textareaContextText);
+          const aiResult = this.parseVisionActionResult(generated, contextualFallbackText);
           console.log("[FormManager] Respuesta recibida de IA:", aiResult);
 
           if (aiResult.accion === VISION_ACTION_CLICK) {
@@ -360,13 +434,13 @@ export default class FormManager {
               continue;
             }
 
-            answerText = this.sanitizeAiTextareaAnswer(aiResult.valor || fallbackText);
+            answerText = this.sanitizeAiTextareaAnswer(aiResult.valor || contextualFallbackText, textareaContextText, contextualFallbackText);
           } else {
-            answerText = this.sanitizeAiTextareaAnswer(aiResult.valor || fallbackText);
+            answerText = this.sanitizeAiTextareaAnswer(aiResult.valor || contextualFallbackText, textareaContextText, contextualFallbackText);
           }
         } catch (error) {
           console.log(`[FormManager] Error al consultar IA en campo ${fieldNumber}: ${error.message}`);
-          answerText = fallbackText;
+          answerText = contextualFallbackText;
         }
       }
 

@@ -12,13 +12,38 @@ const GITHUB_PROFILE_FALLBACK_TEXT = "Proyectos principales: BarberOS (Software 
 const OPENAI_REQUEST_TIMEOUT_MS = 15000;
 const SAFE_JSON_TEXT_FALLBACK = Object.freeze({
   accion: "texto",
-  valor: "Me adapto rápido a nuevas tecnologías. Detalle en CV adjunto."
+  valor: "Tengo experiencia práctica en Node.js, React y SQLite, con foco en backend y automatización de procesos."
 });
+const SALARY_CONTEXT_KEYWORDS = ["remuneracion", "remuneración", "sueldo", "salario", "pretendida", "pretendido", "bruta", "expectativa salarial"];
+const ENGLISH_CONTEXT_KEYWORDS = ["ingles", "inglés", "english", "idioma", "language"];
 
 let githubProfileContextCache = null;
 let githubProfileContextPromise = null;
 
 const toCleanText = (value) => String(value ?? "").trim();
+
+const normalizeContextForMatch = (value) =>
+  String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const buildContextualEmergencyText = (questionContext) => {
+  const normalized = normalizeContextForMatch(questionContext);
+
+  if (SALARY_CONTEXT_KEYWORDS.some((keyword) => normalized.includes(normalizeContextForMatch(keyword)))) {
+    const salary = String(process.env.SUELDO_PRETENDIDO ?? "").replace(/\D/g, "").trim();
+    return salary || "600000";
+  }
+
+  if (ENGLISH_CONTEXT_KEYWORDS.some((keyword) => normalized.includes(normalizeContextForMatch(keyword)))) {
+    return "Mi nivel de inglés es técnico: lectura fluida y conversación básica-intermedia.";
+  }
+
+  return SAFE_JSON_TEXT_FALLBACK.valor;
+};
 
 const isTimeoutRequestError = (error) => {
   const message = String(error?.message ?? "").toLowerCase();
@@ -186,7 +211,9 @@ export async function decidirAccionVisual(base64Image, preguntaContexto) {
   3. Si la pregunta es de texto abierto:
     - Responde: {"accion": "texto", "valor": "Tu respuesta técnica breve (máx 200 caracteres)"}
   4. Tu nivel de inglés es Técnico (lectura fluida), conversacional básico.
-  5. NO describas la imagen.`;
+  5. NO describas la imagen.
+  6. NO digas "miren mi CV", "ver CV adjunto" ni variantes.
+  7. Si la pregunta trata sobre remuneración/sueldo, responde solo un número entero sin símbolos.`;
 
     if (!safeBase64Image) {
       throw new Error("No se recibió la imagen en base64 para la consulta visual.");
@@ -226,7 +253,10 @@ export async function decidirAccionVisual(base64Image, preguntaContexto) {
     } catch (error) {
       if (isTimeoutRequestError(error)) {
         console.error("[VisionError] La API tardó demasiado (Timeout). Usando respuesta de emergencia.");
-        return { accion: "texto", valor: "Me adapto rápido a nuevas tecnologías. Detalle en CV adjunto." };
+        return {
+          accion: "texto",
+          valor: buildContextualEmergencyText(safeQuestionContext)
+        };
       }
 
       throw error;
@@ -274,11 +304,17 @@ export async function decidirAccionVisual(base64Image, preguntaContexto) {
       };
     } catch (error) {
       console.error("[VisionError] No se pudo parsear el JSON:", rawText);
-      return { ...SAFE_JSON_TEXT_FALLBACK };
+      return {
+        accion: "texto",
+        valor: buildContextualEmergencyText(safeQuestionContext)
+      };
     }
   } catch (error) {
     console.error("[VisionError] Error al consultar GPT-4o:", error.message);
-    return { ...SAFE_JSON_TEXT_FALLBACK };
+    return {
+      accion: "texto",
+      valor: buildContextualEmergencyText(preguntaContexto)
+    };
   }
 }
 

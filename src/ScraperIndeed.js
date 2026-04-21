@@ -4,7 +4,7 @@ import { SUELDO_PRETENDIDO } from "./ContentEngine.js";
 import VisionHelper, { VISION_MASTER_PROMPT } from "./VisionHelper.js";
 
 const DEFAULT_QUERIES = ["Desarrollador Junior", "Programador Trainee", "Backend Node"];
-const VISION_FALLBACK_TEXT = "Mi experiencia detallada con Node.js y arquitectura de software está disponible en mi CV adjunto.";
+const VISION_FALLBACK_TEXT = "Tengo experiencia práctica en Node.js, React y SQLite, desarrollando soluciones reales con foco en backend y automatización.";
 
 export default class ScraperIndeed extends BaseScraper {
   constructor({
@@ -29,12 +29,18 @@ export default class ScraperIndeed extends BaseScraper {
     this.visionHelper = new VisionHelper();
   }
 
-  async getTextareaAnswer(containerSelector, shortAnswerFallback = "") {
+  async getTextareaAnswer(containerSelector, shortAnswerFallback = "", questionContext = "") {
+    const fallbackText = String(shortAnswerFallback ?? "").trim() || VISION_FALLBACK_TEXT;
+    const compactQuestionContext = String(questionContext ?? "").replace(/\s+/g, " ").trim().slice(0, 380);
+    const visionPrompt = compactQuestionContext
+      ? `Responde solo esta pregunta del formulario: "${compactQuestionContext}".`
+      : VISION_MASTER_PROMPT;
+
     try {
       const aiResponse = await this.visionHelper.analizarElemento(
         this.page,
         containerSelector,
-        VISION_MASTER_PROMPT
+        visionPrompt
       );
 
       if (aiResponse && typeof aiResponse === "object" && !Array.isArray(aiResponse)) {
@@ -51,10 +57,10 @@ export default class ScraperIndeed extends BaseScraper {
         return cleaned;
       }
 
-      return { accion: "texto", valor: VISION_FALLBACK_TEXT };
+      return { accion: "texto", valor: fallbackText };
     } catch (error) {
       this.log(`VisionHelper fallo al responder pregunta. Fallback aplicado. Detalle: ${error.message}`);
-      return { accion: "texto", valor: VISION_FALLBACK_TEXT };
+      return { accion: "texto", valor: fallbackText };
     }
   }
 

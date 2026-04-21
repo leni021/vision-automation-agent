@@ -8,7 +8,7 @@ Proyecto destacado 1: BarberOS. Aplicación de escritorio multiplataforma con m�
 Proyecto destacado 2: Kiosco Luzuriaga. Web para negocio local end-to-end desarrollada con Node.js, Express y EJS.
 Educación: Próximo ingresante a la Tecnicatura Universitaria en Desarrollo de Software en UADE (agosto 2026).`;
 
-export const respuestaCortaFallback = "Toda mi experiencia técnica, stack (Node.js/React/SQLite) y detalles de mis proyectos (BarberOS) se encuentran detallados en mi CV adjunto. Quedo a entera disposición para profundizar en una entrevista.";
+export const respuestaCortaFallback = "Tengo experiencia práctica en Node.js, React y SQLite, construyendo soluciones reales para negocios y automatización de procesos. Puedo aportar implementación rápida, código mantenible y aprendizaje continuo.";
 export const SUELDO_PRETENDIDO = String(process.env.SUELDO_PRETENDIDO ?? "600000").replace(/\D/g, "") || "600000";
 
 const normalize = (text) => String(text ?? "").toLowerCase();

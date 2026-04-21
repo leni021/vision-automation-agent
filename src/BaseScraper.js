@@ -28,7 +28,17 @@ const DEFAULT_BLOCKED_JOB_TITLE_KEYWORDS = [
   "punzonadora",
   "maquinado",
   "inyeccion",
-  "operario"
+  "operario",
+  "movil",
+  "mobile",
+  "android",
+  "ios",
+  "react native",
+  "flutter",
+  "xamarin",
+  "ionic",
+  "swift",
+  "kotlin"
 ];
 
 const DEFAULT_SALARY_KEYWORDS = ["sueldo", "pretendido", "bruto"];
@@ -322,7 +332,7 @@ export default class BaseScraper {
     };
   }
 
-  async getTextareaAnswer(containerSelector, shortAnswerFallback = "") {
+  async getTextareaAnswer(containerSelector, shortAnswerFallback = "", questionContext = "") {
     return String(shortAnswerFallback ?? "").trim();
   }
 
